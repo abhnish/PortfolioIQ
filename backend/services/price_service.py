@@ -42,14 +42,15 @@ def get_price(ticker: str) -> dict:
 
     # Try fetching live
     try:
+        import math
         ticker_obj = yf.Ticker(ticker)
         hist = ticker_obj.history(period="6mo")
         if not hist.empty and "Close" in hist:
-            closes = hist["Close"].tolist()
-            if len(closes) > 0:
+            closes = [float(p) for p in hist["Close"].tolist() if not (math.isnan(p) or math.isinf(p))]
+            if len(closes) > 2:
                 result = {
-                    "current_price": float(closes[-1]),
-                    "history": [float(p) for p in closes],
+                    "current_price": closes[-1],
+                    "history": closes,
                     "source": "live"
                 }
                 LIVE_HISTORY_CACHE[ticker] = (now, result)

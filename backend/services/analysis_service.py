@@ -1,7 +1,15 @@
+import math
 import numpy as np
 from backend.models.holding import Portfolio
 from backend.models.analysis import PortfolioAnalysis
 from backend.services.price_service import get_price
+
+def _safe(value: float) -> float:
+    """Return 0.0 if value is NaN or Inf, otherwise return the value."""
+    if math.isnan(value) or math.isinf(value):
+        return 0.0
+    return float(value)
+
 
 def calculate_portfolio_weights(portfolio: Portfolio, current_prices: dict[str, float]) -> dict[str, float]:
     """Calculate the weight of each ticker in the portfolio based on current value."""
@@ -20,7 +28,7 @@ def calculate_volatility(weights: dict[str, float], price_histories: dict[str, l
     if not tickers: return 0.0
     
     min_len = min(len(price_histories[t]) for t in tickers)
-    if min_len < 2: return 0.0
+    if min_len < 3: return 0.0
     
     returns_matrix = []
     for t in tickers:
@@ -39,6 +47,10 @@ def calculate_volatility(weights: dict[str, float], price_histories: dict[str, l
         port_variance = cov_matrix.item()
     else:
         port_variance = np.dot(w.T, np.dot(cov_matrix, w))
+        
+    import math
+    if math.isnan(port_variance) or math.isinf(port_variance) or port_variance < 0:
+        return 0.0
         
     daily_vol = np.sqrt(port_variance)
     annualized_vol = daily_vol * np.sqrt(252)
@@ -112,18 +124,19 @@ def analyze_portfolio(portfolio: Portfolio) -> PortfolioAnalysis:
         if min_len > 0:
             for i in range(-min_len, 0):
                 day_val = sum(h.quantity * price_histories[h.ticker][i] for h in portfolio)
-                historical_values.append(day_val)
-    
+                safe_val = _safe(day_val)
+                historical_values.append(safe_val)
+
     return PortfolioAnalysis(
-        total_value=total_value,
-        total_invested=total_invested,
-        total_gain_loss_pct=total_gain_loss_pct,
-        allocation_by_asset=allocation_by_asset,
-        allocation_by_type=allocation_by_type,
-        volatility=volatility,
-        sharpe_ratio=sharpe,
-        diversification_score=div_score,
-        top_holding_concentration=top_concentration,
+        total_value=_safe(total_value),
+        total_invested=_safe(total_invested),
+        total_gain_loss_pct=_safe(total_gain_loss_pct),
+        allocation_by_asset={k: _safe(v) for k, v in allocation_by_asset.items()},
+        allocation_by_type={k: _safe(v) for k, v in allocation_by_type.items()},
+        volatility=_safe(volatility),
+        sharpe_ratio=_safe(sharpe),
+        diversification_score=_safe(div_score),
+        top_holding_concentration=_safe(top_concentration),
         historical_values=historical_values,
         data_source=source
     )
